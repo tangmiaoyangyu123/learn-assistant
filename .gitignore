@@ -1,0 +1,16 @@
+.env
+__pycache__/
+chat_history.json
+.idea/
+
+
+#.gitifnore 作为git的禁止相传名单，列在里面的文件，git一律无视，永远不会传到GitHub
+#为什么今天必须要有：你马上要把整个项目传上 GitHub——如果
+#.env（里面有你的 API Key）跟着传上去，全世界都能看到你
+#的 Key，别人拿它刷模型，烧你的钱。.gitignore 就是那道闸门。
+
+
+
+#.env API Key 保命，最重要的一行
+#——pycache——/ Python 生成的缓存文件夹 垃圾文件，没必要传
+#chat_history.json 私人数据，没必要公开
