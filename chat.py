@@ -1,39 +1,48 @@
-"""第一个AI对话程序"""
-#1.文件头和导入
+#==AI学习助手==
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-#2.拿Key，造连接器
-#打开.env文件，将内部的内容读进内存。
+#添加环境变量，会在当前目录寻找.env文件，找到AIP_Key并会作为环境变量（后续os.geienv会进行环境变量读取），若不存在.env文件
+#不会报错，将会忽略此步骤
 load_dotenv()
 
-#client相当于一个电话，创造Ai链接对象
+#创建客户端
+#api_key读取deepseek的API_Key，若为None，后面会报401错误。
+#base——url覆盖OpenAI默认的请求地址，改为指向Deepseek的服务器，这是Deepseek兼容OpenAI SDK的关键。
+#创建后，client就成为了具有Deepseek的OpenAI风格客户端。
 client = OpenAI(
-    #api_key相当于身份证，os.getenvs
     api_key=os.getenv("DEEPSEEK_API_KEY"),
-    #base_url是服务器地址，告诉程序别连OpenAI官方，去连deep seek的服务器。
     base_url="https://api.deepseek.com"
 )
 
-
-def chat(question: str) -> str:
-    #相当于打电话
+#定义对话函数
+#user_input: str 类型注解，说明穿入的是字符串。 -> str 表示的是返回值为字符串。
+def chat(user_input: str) -> str:
+    #调用API
+    #response = client.chat.completions.create是OpenAI SDK的标准聊天窗口，向服务器发HTTP POST请求
     response = client.chat.completions.create(
-        #表示使用的是哪个模型
+        #model表示的是模型，目前Deepseek有“deepseek-chat”通用对话和“deepseek-reasoner”推理模型。
         model="deepseek-chat",
-        #"role":"system"是身份的系统设定，相当于“员工手册”。
-        #"content"设定AI性格。
-        #question是函数传过来的参量，相当于我输入的文字。
+        #messages是消息列表每一条消息就是一条字典。
         messages=[
-            {"role": "system", "content": "你是一个温柔的人。"},
-            {"role": "user", "content": question}
+            #role 表示的是角色
+            #system 是系统提示，代表AI的性格或是行为规范
+            #user 用户说的话
+            {"role": "system", "content": "你是一个耐心的编程老师，回答简洁清晰。"},
+            {"role": "user", "content": user_input}
         ]
     )
-    # print(response)在下一行代码运行前，这个会出现乱码。
-    #response.choices回答列表，一般只有一个。
-    #message回答的这个消息体，比如我和AI对话，我发消息或者AI发消息。同时也是一个结构体。
-    #content 最终所需要的文字，也就是对话内容
-    return response.choices[0].message.content or ""
 
+    return response.choices[0].message.content
 
+if __name__ == "__main__":
+    print("=== AI助手已启动 ===")
+    print("输入 quit 退出\n")
+    while True:
+        user_input = input("你: ")
+        if user_input.lower() == "quit":
+            print("再见！")
+            break
+        answer = chat(user_input)
+        print(f"AI: {answer}\n")
