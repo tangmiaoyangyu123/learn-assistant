@@ -11,6 +11,6 @@ chat_history.json
 
 
 
-#.env API Key 保命，最重要的一行
+#.env API Key 保命，最重要的一行，作为存放API的
 #——pycache——/ Python 生成的缓存文件夹 垃圾文件，没必要传
 #chat_history.json 私人数据，没必要公开
