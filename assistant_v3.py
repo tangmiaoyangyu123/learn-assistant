@@ -1,3 +1,14 @@
+r"""学习助手 V2 主程序
+
+功能：多轮式对话 + 4 角色转换 + 历史存档 + 三层异常保护
+    1.网络错误：APIConnectionEorror 等分类捕捉，失败自动回滚用户消息
+    2.优雅退出：KeyboardInterrupt 全局补获， 退出前save_history
+    3.文件损坏：load_history 捕获 JSONDecodeError ，坏文件为.bak
+
+角色 system 统一由 prompts.py build_system 模板拼接（v3）
+修改对话逻辑前先跑三连破坏测试：断网/Ctrl+C/改坏 chat_history.json
+
+"""
 import json                             #JSON 序列化/反序列化 Python的对象（list，dict）与JSON相互转化，用于存档，读档
 import os                               #标准库，下列有具体用法
 from json import JSONDecodeError        #判断不合法异常
