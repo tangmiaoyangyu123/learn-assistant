@@ -8,22 +8,22 @@ import math
 
 def dot(a, b):
     """点积：对应位置相乘再求和"""
-    return sum(x * y for x, y in zip(a, b))
+    return sum(x * y for x, y in zip(a, b))          #zip的作用是一一对应，比如x坐标对应x坐标。
 
 
 def norm(a):
     """向量的长度（模）"""
-    return math.sqrt(dot(a, a))
+    return math.sqrt(dot(a, a))          #求模的长度，先平方再取根号。
 
 
 def cosine(a, b):
     """余弦相似度：两个方向有多接近，与向量长短无关"""
-    return dot(a, b) / (norm(a) * norm(b))
+    return dot(a, b) / (norm(a) * norm(b))          #就是求两个向量之间夹角的余弦值。余弦值为 1（方向完全相同）
 
 
 def euclidean(a, b):
     """欧氏距离：两点的直线距离，受长短影响"""
-    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))          #就是两点之间的距离。
 
 
 # ---------- 手工造的词向量（3 维：可爱度 / 速度 / 机械感） ----------
@@ -41,6 +41,7 @@ def euclidean(a, b):
 
 WORDS = {
     "小猫": [0.9, 0.2, 0.0],
+
     "小狗": [0.8, 0.35, 0.05],
     "猎豹": [0.3, 1.0, 0.1],
     "锤子": [0.1, 0.2, 0.95],
@@ -49,19 +50,20 @@ WORDS = {
 }
 
 # 检索用的打分函数。观察任务 3 会让你把它换成 euclidean
-SCORE_FN = cosine
+SCORE_FN = cosine          #选择打分函数cosine 或者是 euclidean.
 # SCORE_FN = euclidean
 
 
 def bar(score: float) -> str:
     """把相似度画成简易条形图"""
-    return "█" * int(max(score, 0) * 20)
+    return "█" * int(max(score, 0) * 20)   #负分记为0，放大20倍，最后取整输出。
 
 
 def rank(target: list, exclude: str = "") -> list:
     """按 SCORE_FN 对所有词打分，从高到低排序"""
-    scored = [(w, SCORE_FN(target, v)) for w, v in WORDS.items() if w != exclude]
-    return sorted(scored, key=lambda x: x[1], reverse=True)
+    scored = [(w, SCORE_FN(target, v)) for w, v in WORDS.items() if w != exclude]          #target为小猫，排除，然后依次小猫计算其他物体的余弦相似值，cos越接近1，相似值越高。.item()输出键值。
+    return sorted(scored, key=lambda x: x[1], reverse=True)           #reverse=True为从高到低排。key=lambda x是匿名函数，x[1]代表根据第二个大小进行排序。
+#匿名函数：e.g: x + y：一般是构建add(),但也可以写成lambda x, y: x + y。
 
 # def rank(target: list, exclude: str = "") -> list:
 #     """按 SCORE_FN 对所有词打分，从高到低排序"""
