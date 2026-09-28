@@ -2,6 +2,7 @@
 __pycache__/
 chat_history.json
 .idea/
+chroma_db/
 
 
 #.gitifnore 作为git的禁止相传名单，列在里面的文件，git一律无视，永远不会传到GitHub
