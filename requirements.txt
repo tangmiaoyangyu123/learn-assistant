@@ -1,0 +1,9 @@
+# 第4周周末项目所需依赖（Python 3.10+）
+openai>=1.0
+python-dotenv
+pypdf
+chromadb>=1.5
+onnxruntime
+tokenizers
+numpy
+gradio>=5.0

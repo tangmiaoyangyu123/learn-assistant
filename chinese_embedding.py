@@ -1,16 +1,20 @@
 r"""第3周Day5前置: 中文 embedding 模型（ONNX 版，不需要 torch / sentence-transformers）
 
 模型: 智源研究院 BAAI/bge-small-zh-v1.5（ONNX 量化版，24MB）
-位置: D:\workbuddy_data\models\bge-small-zh-onnx
+位置: 本文件旁边的 models/bge-small-zh-onnx（可用环境变量 BGE_MODEL_DIR 覆盖）
 原理: ONNX 推理 → 取 CLS 位输出 → L2 归一化，得到 512 维语义向量
 """
+import os
 from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 
-MODEL_DIR = Path(r"D:\workbuddy_data\models\bge-small-zh-onnx")
+MODEL_DIR = Path(os.getenv(
+    "BGE_MODEL_DIR",
+    Path(__file__).parent / "models" / "bge-small-zh-onnx",
+))
 
 
 class ChineseEmbedding:
