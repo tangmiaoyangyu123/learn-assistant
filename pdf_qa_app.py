@@ -24,12 +24,16 @@ from rag_qa import ask
 
 def fmt_sources(hits):
     """检索来源清单：编号 + 文件名/页码 + 距离"""
-    lines = []
+    lines = [
+        "| # | 来源 | 距离 |",
+        "|---|---|---|",
+    ]
     for i, (_doc, dist, meta) in enumerate(hits, 1):
         where = meta["source"]
         if meta.get("page"):
             where += f" 第{meta['page']}页"
-        lines.append(f"[{i}] {where}    距离 {dist:.3f}")
+        mark = " ⚠️" if dist > 0.9 else ""
+        lines.append(f"| {i} | {where} | {dist:.3f}{mark} |")
     return "\n".join(lines)
 
 
@@ -100,9 +104,25 @@ with gr.Blocks(title="PDF 问答助手 V1") as demo:
         )
         ask_btn = gr.Button("提问", variant="primary")
         ans = gr.Textbox(label="回答", lines=12, buttons=["copy"])
-        src = gr.Textbox(label="检索来源（Top-3）", lines=4)
+        with gr.Accordion(label="检索来源（Top-3）", open=False):
+            src = gr.Markdown("_还没有提问。_")
         gr.Markdown(
             "> 回答只依据你上传的文档；资料不足时它会直接说「资料里没有相关内容」。"
+        )
+
+    with gr.Tab("③ 使用说明"):
+        gr.Markdown(
+            "### 怎么用\n"
+            "1. 在「① 上传文档」里选择 PDF（可多选）\n"
+            "2. 点「加入知识库」\n"
+            "3. 切到「② 提问」，输入问题\n\n"
+            "### 支持什么\n"
+            "- 中文 PDF（文字版）\n"
+            "- 一次可上传多个文件\n"
+            "- 回答会标注引用来源和页码\n\n"
+            "### 不支持什么\n"
+            "- **扫描件 / 图片型 PDF**：里面没有文字层，提不出内容，会被跳过\n"
+            "- 一次上传太多大文件会明显变慢\n"
         )
 
     up_btn.click(upload, inputs=files, outputs=[up_log, kb_view])
