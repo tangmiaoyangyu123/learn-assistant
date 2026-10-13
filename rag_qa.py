@@ -45,6 +45,7 @@ SYSTEM_PROMPT = """你是一个严谨的文档问答助手。
 2.每条结论后用[1][2]这样的编号标注它来自哪一段资料。
 3. 如果【资料】不足以回答问题，直接回答"资料里没有相关内容"，不要猜测，不要补充。
 4.回答简洁，用中文。
+5. 如果【资料】没有直接答案，但【对话历史】里已经回答过同一问题，可以据此回答。
 """
 
 USER_TEMPLATE = """【资料】
@@ -76,7 +77,7 @@ def build_context(hits):
         parts.append(f"[{i}] （来源：{where}）\n{body}")
     return "\n\n".join(parts)
 
-def ask(collection, question, verbose=False):
+def ask(collection, question, verbose=False, history=None, max_turns=2):
     """核心：检索 → 拼 prompt → 调模型 → 返回答案"""
     #在知识库中寻找最相关的3段。
     hits = search(collection, question, n=N_RESULTS)
@@ -90,12 +91,23 @@ def ask(collection, question, verbose=False):
             print(f"  [{i}] 距离 {dist:.3f} | {where}")
         print("--- 检索结束 ---\n")
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # ① 兜底：None / 空列表 → 统一变成空列表
+    history = history or []
+
+    # ② 只取"最近 max_turns 轮"：1 轮 = 2 条，所以是末尾 max_turns*2 条
+    recent = history[-(max_turns * 2):]
+
+    # ③ 原样塞进 messages（历史元素本来就是 {"role":…, "content":…} 格式）
+    for h in recent:
+        messages.append(h)
+
+    messages.append(                      # ← 这行原来就有，别动
         {"role": "user", "content": USER_TEMPLATE.format(
-            #相当于填空，根据上面USER_TEMPLATE
-            context=build_context(hits), question=question)},
-    ]
+            context=build_context(hits), question=question)}
+    )
+
 
     try:
         resp = client.chat.completions.create(
@@ -150,7 +162,9 @@ if __name__ == "__main__":
 
 
 
-
+#1.一个负责对话历史，一个负责聊天框的显示。会把原来文件覆盖。
+#2.只取一两轮，防止内存过大。
+#3.需求2真正实现了记忆功能，记得上一轮所说的话
 
 
 
