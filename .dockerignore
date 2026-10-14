@@ -1,0 +1,18 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+# ⚠️ 密钥：绝不能进镜像
+.env
+
+# 本地运行状态（挂卷进去，不打进镜像）
+chroma_db/
+.gradio/
+chat_history.json
+
+# 不需要打包的资料
+test.pdf
+test_doc.txt

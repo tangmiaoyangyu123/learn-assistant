@@ -104,8 +104,16 @@ def answer(question, history):
     # 实测确认：chromadb 1.5.9 查空集合返回 [[]]，【不会报错】。
     # 所以删掉它不会崩，但会白调一次大模型，还给用户一句莫名其妙的
     # "资料里没有相关内容" —— 明明是他还没上传文档。所以加回来。
+    # ── 【修 UX 缺陷】原来这里直接 `return history`，用户提问后【气泡里什么都没有】 ──
+    # 空输入不该进历史（用户啥也没问），但【空库】不一样：用户确实问了，只是没资料可答。
+    # 必须把问题显示出来，并告诉他为什么答不了 —— 否则就是"点了没反应"的静默失效。
     if col.count() == 0:
-        return history, "_知识库还是空的，请先在「① 上传文档」里加入 PDF。_", history, ""
+        tip = "⚠️ 知识库还是空的，请先在「① 上传文档」里加入 PDF，然后再提问。"
+        new_history = history + [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": tip},
+        ]
+        return new_history, f"_{tip}_", new_history, ""
 
     # ── 【需求 2 已接上】原代码：test, hits = ask(col, question) ──────────────
     # 变量名 test 是"测试"的意思，这里装的是模型答案，改叫 text。
