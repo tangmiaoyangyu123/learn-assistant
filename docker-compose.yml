@@ -1,0 +1,12 @@
+services:
+  pdf-qa:
+    image: pdf-qa:v1
+    container_name: pdf-qa
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    volumes:
+      - D:\PythonProject\chroma_db:/app/chroma_db
+    restart: unless-stopped
+
