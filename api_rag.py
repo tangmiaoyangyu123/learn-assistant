@@ -14,7 +14,11 @@ from search_docs import search
 
 from docs_helper import attach_docs
 
+import db
+
 load_dotenv()
+
+db.init_db()
 
 app = FastAPI(title="RAG 问答", docs_url=None, redoc_url=None)
 attach_docs(app)
@@ -151,3 +155,85 @@ async def ask_stream_api(req: AskRequest):
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    session_id: str | None = Field(default=None, description="不传就新建一个会话")
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: list[Source]
+    elapsed: float
+    session_id: str            # 一定要回传，客户端下次带着它来
+
+
+class MessageOut(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    messages: list[MessageOut]
+
+
+class DeleteResponse(BaseModel):
+    session_id: str
+    deleted: int
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    col = kb_manager.get_collection()
+
+    # ① 会话 id：传了就沿用，没传才新建
+    sid = req.session_id or db.new_session_id()
+
+    # ② 读历史（只含 role/content，喂给模型）
+    history = db.get_history(sid)
+
+    # ③ 先存用户问题
+    db.save_message(sid, "user", req.question)
+
+    # ④ 计时 + 调模型
+    t0 = time.perf_counter()
+    answer, hits = rag_qa.ask(col, req.question, history=history)
+    elapsed = time.perf_counter() - t0
+
+    # ⑤ 存答案
+    db.save_message(sid, "assistant", answer)
+
+    # ⑥ hits → sources
+    sources = [
+        Source(
+            source=meta["source"],
+            page=meta.get("page"),
+            chunk=meta.get("chunk"),
+            distance=round(dist, 4),
+            content=doc[:200],
+        )
+        for doc, dist, meta in hits
+    ]
+
+    # ⑦ 返回
+    return ChatResponse(
+        answer=answer,
+        sources=sources,
+        elapsed=round(elapsed, 2),
+        session_id=sid,
+    )
+
+
+@app.get("/history/{session_id}", response_model=HistoryResponse)
+def get_history_api(session_id: str):
+    rows = db.get_messages(session_id)
+    return HistoryResponse(session_id=session_id, messages=rows)
+
+
+@app.delete("/history/{session_id}", response_model=DeleteResponse)
+def delete_history_api(session_id: str):
+    n = db.clear_session(session_id)
+    return DeleteResponse(session_id=session_id, deleted=n)
