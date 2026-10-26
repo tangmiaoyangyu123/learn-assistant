@@ -38,6 +38,10 @@ MODEL = "deepseek-chat"
 N_RESULTS = 3
 MAX_CONTEXT_CHARS = 1200
 
+
+class RagError(Exception):
+    """RAG 链路的可预期失败（Key 错、限流、断网）。"""
+
 SYSTEM_PROMPT = """你是一个严谨的文档问答助手。
 
 规则：
@@ -78,10 +82,10 @@ def build_context(hits):
         parts.append(f"[{i}] （来源：{where}）\n{body}")
     return "\n\n".join(parts)
 
-def ask(collection, question, verbose=False, history=None, max_turns=2):
+def ask(collection, question, verbose=False, history=None, max_turns=2, n_results=N_RESULTS):
     """核心：检索 → 拼 prompt → 调模型 → 返回答案"""
-    #在知识库中寻找最相关的3段。
-    hits = search(collection, question, n=N_RESULTS)
+    #在知识库中寻找最相关的 n_results 段。
+    hits = search(collection, question, n=n_results)
     #可选的调试输出。
     if verbose:
         print("--- 检索详情 ---")
@@ -113,14 +117,15 @@ def ask(collection, question, verbose=False, history=None, max_turns=2):
     try:
         resp = client.chat.completions.create(
             model=MODEL, messages=messages, temperature=0.1,
+            timeout=30,
         )
         return resp.choices[0].message.content, hits
-    except AuthenticationError:
-        return "❌ API Key 无效，检查 .env 里的 DEEPSEEK_API_KEY", hits
-    except RateLimitError:
-        return "❌ 请求被限流，稍后再试", hits
-    except APIConnectionError:
-        return "❌ 网络连接失败，检查网络或代理设置", hits
+    except AuthenticationError as e:
+        raise RagError("API Key 无效，检查 .env 里的 DEEPSEEK_API_KEY") from e
+    except RateLimitError as e:
+        raise RagError("请求被限流，稍后再试") from e
+    except APIConnectionError as e:
+        raise RagError("网络连接失败，检查网络或代理设置") from e
 
 
 def main():
@@ -138,7 +143,11 @@ def main():
     #判断有没有带问题。
     if args:
         q = " ".join(args)
-        answer, hits = ask(collection, q, verbose)
+        try:
+            answer, hits = ask(collection, q, verbose)
+        except RagError as e:
+            print(f"出错：{e}")
+            return
         print(f"问题：{q}\n")
         print(answer)
         return
@@ -152,7 +161,11 @@ def main():
             break
         if not q:
             break
-        answer, _ = ask(collection, q, verbose)
+        try:
+            answer, _ = ask(collection, q, verbose)
+        except RagError as e:
+            print(f"\n出错：{e}\n")
+            continue
         print(f"\n{answer}\n")
 
 

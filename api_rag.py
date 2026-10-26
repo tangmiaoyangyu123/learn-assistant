@@ -7,8 +7,8 @@ import kb_manager
 import rag_qa
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from search_docs import search
@@ -23,6 +23,11 @@ db.init_db()
 
 app = FastAPI(title="RAG 问答", docs_url=None, redoc_url=None)
 attach_docs(app)
+
+
+@app.exception_handler(rag_qa.RagError)
+def rag_error_handler(request: Request, exc: rag_qa.RagError):
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 aclient = AsyncOpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
@@ -61,7 +66,7 @@ def ask_api(rep: AskRequest):
     col = kb_manager.get_collection()
 
     t0 = time.perf_counter()
-    answer, hits = rag_qa.ask(col, rep.question)
+    answer, hits = rag_qa.ask(col, rep.question, n_results=rep.top_k)
     elapsed = time.perf_counter() - t0
 
     sources = [
@@ -122,6 +127,7 @@ async def ask_stream(collection, question):
         messages=messages,
         temperature=0.1,
         stream=True,
+        timeout=30,
     )
 
     async for chunk in stream:
