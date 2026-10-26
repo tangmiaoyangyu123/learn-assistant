@@ -5,8 +5,9 @@ import time
 
 import kb_manager
 import rag_qa
+from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -237,3 +238,82 @@ def get_history_api(session_id: str):
 def delete_history_api(session_id: str):
     n = db.clear_session(session_id)
     return DeleteResponse(session_id=session_id, deleted=n)
+
+
+#=====================带文件传输=========================
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+class DocOut(BaseModel):
+    name: str = Field(description="文件名")
+    chunks: int = Field(description="这个文件在库里有几块")
+
+
+class DocListResponse(BaseModel):
+    documents: list[DocOut]
+    total_chunks: int = Field(description="全部文档合计多少块")
+
+
+class UploadResult(BaseModel):
+    name: str
+    level: str = Field(description="ok 正常 / suspect 可疑但仍入库 / fail 没入库")
+    chunks: int
+    pages: int
+    chars: int
+    msg: str = Field(description="给人看的说明")
+
+
+class DeleteDocResponse(BaseModel):
+    name: str
+    deleted_chunks: int = Field(description="删掉了多少块（删之前有几块）")
+
+
+@app.post("/documents", response_model=UploadResult)
+async def upload_doc(file: UploadFile = File(...)):
+    name = Path(file.filename).name
+
+    if not name.lower().endswith(".pdf"):
+        raise HTTPException(400, f"只收 PDF，你传的是 {name}")
+
+    target = UPLOAD_DIR / name
+    target.write_bytes(await file.read())
+
+    try:
+        report = kb_manager.add_pdf(target)
+    except Exception as e:
+        target.unlink(missing_ok=True)
+        raise HTTPException(400, f"这个文件解析失败：{e}")
+
+    if report["level"] == "fail":
+        target.unlink(missing_ok=True)
+        raise HTTPException(400, report["msg"])
+
+    return UploadResult(**report)
+
+
+@app.get("/documents", response_model=DocListResponse)
+def list_docs():
+    items = kb_manager.list_sources()
+
+    docs = [DocOut(name=n, chunks=c) for n, c in items]
+
+    return DocListResponse(
+        documents=docs,
+        total_chunks=sum(d.chunks for d in docs),
+    )
+
+
+@app.delete("/documents/{name}", response_model=DeleteDocResponse)
+def delete_doc(name: str):
+    items = dict(kb_manager.list_sources())
+    if name not in items:
+        raise HTTPException(404, detail=f"知识库里没有 {name}")
+    n = items[name]
+
+    kb_manager.remove_source(name)
+
+    target = UPLOAD_DIR / name
+    if target.exists():
+        target.unlink()
+
+    return DeleteDocResponse(name=name, deleted_chunks=n)
