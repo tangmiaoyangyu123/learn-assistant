@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>learn-assistant</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --card: #fff; --text: #1a1a1a;
+    --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  textarea {
+    width: 100%; min-height: 88px; resize: vertical; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 9px 18px; font: inherit; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; letter-spacing: .04em; }
+  .answer { white-space: pre-wrap; }
+  .sources { display: flex; flex-direction: column; gap: 8px; }
+  .src {
+    font-size: 12px; background: #eef2ff; color: #3730a3;
+    border-radius: 6px; padding: 8px 10px;
+  }
+  .src-head { font-weight: 600; }
+  .src-body { color: #4b5563; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>learn-assistant</h1>
+  <div class="sub">基于本地知识库的问答服务</div>
+
+  <div class="card">
+    <textarea id="q" placeholder="问点什么，比如：这份文档讲了什么？"></textarea>
+    <div class="row">
+      <button id="send">提问</button>
+      <label style="font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="stream" checked> 流式
+      </label>
+      <span class="meta" id="meta"></span>
+    </div>
+  </div>
+
+  <div class="card" id="answerCard">
+    <div class="label">回答</div>
+    <div class="answer" id="answer"></div>
+  </div>
+
+  <div class="card" id="sourcesCard">
+    <div class="label">来源</div>
+    <div class="sources" id="sources"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function renderSources(list) {
+  const box = $("sources");
+  box.innerHTML = "";
+
+  if (!list || !list.length) {
+    $("sourcesCard").style.display = "";
+    box.innerHTML = '<span style="color:#6b7280;font-size:13px">本次回答未检索到相关内容</span>';
+    return;
+  }
+  $("sourcesCard").style.display = "";
+
+  for (const s of list) {
+    const div = document.createElement("div");
+    div.className = "src";
+
+    const head = document.createElement("div");
+    head.className = "src-head";
+    head.textContent = s.page
+      ? `${s.source} 第 ${s.page} 页 · 距离 ${s.distance}`
+      : `${s.source} · 距离 ${s.distance}`;
+
+    const body = document.createElement("div");
+    body.className = "src-body";
+    body.textContent = s.content || "";
+
+    div.appendChild(head);
+    div.appendChild(body);
+    box.appendChild(div);
+  }
+}
+
+async function askOnce(question) {
+  const res = await fetch("/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, top_k: 3 }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  $("answer").textContent = data.answer;
+  renderSources(data.sources);
+}
+
+async function askStream(question) {
+  $("answer").textContent = "（流式明天接）";
+}
+
+async function send() {
+  const question = $("q").value.trim();
+  if (!question) return;
+  $("answer").textContent = "";
+  $("sources").innerHTML = "";
+  $("meta").textContent = "";
+  $("send").disabled = true;
+  $("q").disabled = true;
+  const t0 = performance.now();
+  try {
+    if ($("stream").checked) await askStream(question);
+    else await askOnce(question);
+  } catch (e) {
+    $("answer").textContent = "出错了：" + e.message;
+  } finally {
+    $("send").disabled = false;
+    $("q").disabled = false;
+    $("meta").textContent = Math.round(performance.now() - t0) + " ms";
+  }
+}
+
+// 两个入口，共用同一个 send：点按钮、按回车
+$("send").onclick = send;
+
+$("q").onkeydown = (e) => {
+  // isComposing：中文输入法正在组词时为 true，此时回车是「选词上屏」，不能发送
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    send();
+  }
+};
+</script>
+</body>
+</html>

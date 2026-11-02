@@ -8,7 +8,8 @@ import rag_qa
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from search_docs import search
@@ -23,6 +24,11 @@ db.init_db()
 
 app = FastAPI(title="RAG 问答", docs_url=None, redoc_url=None)
 attach_docs(app)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse("static/index.html")
 
 
 @app.exception_handler(rag_qa.RagError)
