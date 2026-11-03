@@ -42,6 +42,11 @@
   }
   .src-head { font-weight: 600; }
   .src-body { color: #4b5563; margin-top: 4px; }
+  .docs { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .doc { display: flex; align-items: center; gap: 6px; font-size: 13px;
+         padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .doc .name { flex: 1; }
+  .doc button { padding: 4px 10px; font-size: 12px; background: #ef4444; }
 </style>
 </head>
 <body>
@@ -56,6 +61,11 @@
       <label style="font-size:13px;color:var(--muted)">
         <input type="checkbox" id="stream" checked> 流式
       </label>
+      <label style="font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="chat"> 多轮
+      </label>
+      <button id="newchat" style="background:#224998">新会话</button>
+      <span id="sid" style="font-size:12px;color:var(--muted)"></span>
       <span class="meta" id="meta"></span>
     </div>
   </div>
@@ -69,10 +79,22 @@
     <div class="label">来源</div>
     <div class="sources" id="sources"></div>
   </div>
+
+  <div class="card" id="kbCard">
+    <div class="label">知识库</div>
+    <div class="row">
+      <input type="file" id="file" accept=".pdf">
+      <button id="upload">上传</button>
+      <span class="meta" id="kbMeta"></span>
+    </div>
+    <div id="docs" class="docs"></div>
+  </div>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
+
+let serverElapsed = null;
 
 function renderSources(list) {
   const box = $("sources");
@@ -117,8 +139,162 @@ async function askOnce(question) {
   renderSources(data.sources);
 }
 
+let SID = localStorage.getItem("sid") || null;
+
+async function askChat(question){
+  const res = await fetch("/chat",{
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body:JSON.stringify({ question, session_id: SID}),
+  });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+
+  const data = await res.json();
+
+  SID = data.session_id
+  localStorage.setItem("sid", SID)
+  $("sid").textContent = "会话 " + SID.slice(0, 8);
+
+  $("answer").textContent = data.answer;
+  renderSources(data.sources);
+}
+
 async function askStream(question) {
-  $("answer").textContent = "（流式明天接）";
+  const res = await fetch("/ask/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, top_k: 3 }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    // ① 字节 → 文本。stream:true 让「半个汉字」留在解码器里，等下一片补齐
+    buffer += decoder.decode(value, { stream: true });
+
+    // ② 按空行切块。最后一段可能是半截，必须留下
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop();
+
+    for (const block of parts) handleBlock(block);
+  }
+
+  // ③ 收尾：正常情况下 buffer 已经是空串
+  if (buffer.trim()) handleBlock(buffer);
+}
+
+function handleBlock(block) {
+  let event = "message";
+  let data = "";
+
+  // ④ 逐行解析，不能整块 startsWith("data: ")
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event: ")) event = line.slice(7).trim();
+    else if (line.startsWith("data: ")) data = line.slice(6);
+  }
+
+  // ⑤ [DONE] 不是 JSON，先拦掉
+  if (!data || data === "[DONE]") return;
+
+  const obj = JSON.parse(data);
+
+  if (event === "meta") {
+    renderSources(obj.sources);
+  } else if (event === "done") {
+    serverElapsed = obj.elapsed;
+  } else {
+    $("answer").textContent += obj.delta;
+  }
+}
+
+async function loadDocs() {
+  const res = await fetch("/documents");
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+
+  const box = $("docs");
+  box.innerHTML = "";
+
+  if (!data.documents.length) {
+    box.innerHTML = '<span style="color:#6b7280;font-size:13px">知识库是空的，先传一个 PDF</span>';
+    $("kbMeta").textContent = "";
+    return;
+  }
+
+  for (const d of data.documents) {
+    const row = document.createElement("div");
+    row.className = "doc";
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = d.name;
+
+    const count = document.createElement("span");
+    count.style.color = "var(--muted)";
+    count.textContent = d.chunks + " 块";
+
+    const del = document.createElement("button");
+    del.textContent = "删除";
+    del.onclick = () => deleteDoc(d.name);
+
+    row.appendChild(name);
+    row.appendChild(count);
+    row.appendChild(del);
+    box.appendChild(row);
+  }
+
+  $("kbMeta").textContent = `共 ${data.documents.length} 个文件 · ${data.total_chunks} 块`;
+}
+
+async function uploadFile() {
+  const f = $("file").files[0];
+  if (!f) {
+    $("kbMeta").textContent = "先选一个 PDF";
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append("file", f);            // 字段名 file，对应后端 File(...)
+
+  $("upload").disabled = true;
+  $("kbMeta").textContent = "上传解析中…";
+
+  try {
+    const res = await fetch("/documents", { method: "POST", body: fd });
+    // 注意：这里没有 headers，一个都不能加
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "HTTP " + res.status);
+    }
+
+    const data = await res.json();
+    $("kbMeta").textContent = `${data.name} 入库 ${data.chunks} 块（${data.pages} 页）`;
+    $("file").value = "";          // 清空选择，方便再传
+    await loadDocs();
+  } catch (e) {
+    $("kbMeta").textContent = "失败：" + e.message;
+  } finally {
+    $("upload").disabled = false;
+  }
+}
+
+async function deleteDoc(name) {
+  if (!confirm(`删除 ${name}？`)) return;
+
+  const res = await fetch("/documents/" + encodeURIComponent(name), { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert("删除失败：" + (err.detail || res.status));
+    return;
+  }
+  await loadDocs();
 }
 
 async function send() {
@@ -127,23 +303,50 @@ async function send() {
   $("answer").textContent = "";
   $("sources").innerHTML = "";
   $("meta").textContent = "";
+  serverElapsed = null;
   $("send").disabled = true;
   $("q").disabled = true;
   const t0 = performance.now();
   try {
-    if ($("stream").checked) await askStream(question);
+    if ($("chat").checked) await askChat(question);
+    else if ($("stream").checked) await askStream(question);
     else await askOnce(question);
   } catch (e) {
     $("answer").textContent = "出错了：" + e.message;
   } finally {
     $("send").disabled = false;
     $("q").disabled = false;
-    $("meta").textContent = Math.round(performance.now() - t0) + " ms";
+    const local = Math.round(performance.now() - t0) + " ms";
+    $("meta").textContent = serverElapsed
+      ? `本地 ${local} · 服务端 ${serverElapsed} s`
+      : local;
   }
 }
 
 // 两个入口，共用同一个 send：点按钮、按回车
 $("send").onclick = send;
+
+// 新会话：删后端历史 → 清本地 id → 清界面
+$("newchat").onclick = async () => {
+  if (SID) {
+    await fetch("/history/" + SID, { method: "DELETE" }).catch(() => {});
+  }
+  SID = null;
+  localStorage.removeItem("sid");
+  $("sid").textContent = "";
+  $("answer").textContent = "";
+  $("sources").innerHTML = "";
+  $("meta").textContent = "";
+};
+
+// 页面加载时，如果 localStorage 里还留着上次的会话，显示出来
+if (SID) $("sid").textContent = "会话 " + SID.slice(0, 8);
+
+// 知识库：绑定上传按钮，并在一进页面就拉一次列表
+$("upload").onclick = uploadFile;
+loadDocs().catch((e) => {
+  $("kbMeta").textContent = "读取知识库失败：" + e.message;
+});
 
 $("q").onkeydown = (e) => {
   // isComposing：中文输入法正在组词时为 true，此时回车是「选词上屏」，不能发送
