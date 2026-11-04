@@ -37,6 +37,7 @@ MODEL = "deepseek-chat"
 #检索三段资料。
 N_RESULTS = 3
 MAX_CONTEXT_CHARS = 1200
+MAX_TURNS = 3
 
 
 class RagError(Exception):
@@ -82,7 +83,7 @@ def build_context(hits):
         parts.append(f"[{i}] （来源：{where}）\n{body}")
     return "\n\n".join(parts)
 
-def ask(collection, question, verbose=False, history=None, max_turns=2, n_results=N_RESULTS):
+def ask(collection, question, verbose=False, history=None, max_turns=MAX_TURNS, n_results=N_RESULTS):
     """核心：检索 → 拼 prompt → 调模型 → 返回答案"""
     #在知识库中寻找最相关的 n_results 段。
     hits = search(collection, question, n=n_results)

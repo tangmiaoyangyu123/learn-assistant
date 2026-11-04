@@ -47,6 +47,10 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     top_k: int = Field(default=3, ge=1, le=10)
 
+class StreamRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    top_k: int = Field(default=3, ge=1, le=10)
+    session_id: str | None = Field(default=None, description="传了就带历史，不传当单轮")
 
 class Source(BaseModel):
     """一条检索来源。"""
@@ -90,11 +94,12 @@ def ask_api(rep: AskRequest):
 
 
 
-async def ask_stream(collection, question):
+async def ask_stream(collection, question, history = None):
     """异步流式问答：检索 → 发来源 → 流式生成 → 发结束。
 
     yield (事件类型, 数据字典)
     """
+    history = history or []
     t0 = time.perf_counter()
 
     # ① 检索（同步调用，实测 18 毫秒，可接受）
@@ -111,13 +116,18 @@ async def ask_stream(collection, question):
         )
         for doc, dist, meta in hits
     ]
+    messages = [{"role": "system", "content": rag_qa.SYSTEM_PROMPT}]
+
+    recent = history[-(rag_qa.MAX_TURNS * 2):]
+
+    for h in recent:
+        messages.append(h)
 
     # ③ 立刻把来源发出去（第 4 步）
     yield ("meta", {"sources": [s.model_dump() for s in sources]})
 
     # ④ 拼 prompt，复用 rag_qa 里的模板
-    messages = [
-        {"role": "system", "content": rag_qa.SYSTEM_PROMPT},
+    messages.append(
         {
             "role": "user",
             "content": rag_qa.USER_TEMPLATE.format(
@@ -125,7 +135,7 @@ async def ask_stream(collection, question):
                 question=question,
             ),
         },
-    ]
+    )
 
     # ⑤ 流式调模型
     stream = await aclient.chat.completions.create(
@@ -146,18 +156,30 @@ async def ask_stream(collection, question):
 
 
 @app.post("/ask/stream")
-async def ask_stream_api(req: AskRequest):
+async def ask_stream_api(req: StreamRequest):
     """流式问答。响应是 text/event-stream，不是 JSON。"""
     col = kb_manager.get_collection()
 
+    sid = req.session_id or db.new_session_id()
+    history = db.get_history(sid)
     async def event_gen():
         try:
-            async for kind, data in ask_stream(col, req.question):
+            # ① 问题一进生成器就存，和「是不是 meta 事件」无关
+            db.save_message(sid, "user", req.question)
+            answer = ""                            # ② 边发边拼，攒完整答案
+
+            # ③ 把 history 传下去，否则多轮是空的
+            async for kind, data in ask_stream(col, req.question, history=history):
                 if kind == "meta":
+                    data["session_id"] = sid       # ④ 前端靠这个拿到会话 id
                     yield f"event: meta\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
                 elif kind == "delta":
+                    answer += data["delta"]        # ⑤ 这一小段先攒着
                     yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
                 elif kind == "done":
+                    # ⑥ 只有正常走完才存答案。用户点「停止」会抛 CancelledError，
+                    #    根本到不了这里 —— 「中断不存」靠位置自然实现，不用写 if
+                    db.save_message(sid, "assistant", answer)
                     yield "data: [DONE]\n\n"
                     yield f"event: done\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
         except asyncio.CancelledError:

@@ -132,6 +132,7 @@ async function askOnce(question) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, top_k: 3 }),
+    signal: controller.signal,
   });
   if (!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
@@ -140,12 +141,14 @@ async function askOnce(question) {
 }
 
 let SID = localStorage.getItem("sid") || null;
+let controller = null;
 
 async function askChat(question){
   const res = await fetch("/chat",{
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body:JSON.stringify({ question, session_id: SID}),
+    signal: controller.signal,
   });
   if(!res.ok) throw new Error("HTTP " + res.status);
 
@@ -163,7 +166,12 @@ async function askStream(question) {
   const res = await fetch("/ask/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, top_k: 3 }),
+    body: JSON.stringify({
+      question,
+      top_k: 3,
+      session_id: $("chat").checked ? SID : null,
+    }),
+    signal: controller.signal,
   });
   if (!res.ok) throw new Error("HTTP " + res.status);
 
@@ -206,6 +214,11 @@ function handleBlock(block) {
 
   if (event === "meta") {
     renderSources(obj.sources);
+    if (obj.session_id) {
+      SID = obj.session_id;
+      localStorage.setItem("sid", SID);
+      $("sid").textContent = "会话 " + SID.slice(0, 8);
+    }
   } else if (event === "done") {
     serverElapsed = obj.elapsed;
   } else {
@@ -304,17 +317,25 @@ async function send() {
   $("sources").innerHTML = "";
   $("meta").textContent = "";
   serverElapsed = null;
-  $("send").disabled = true;
+
+  controller = new AbortController();
+  $("send").textContent = "停止";
   $("q").disabled = true;
   const t0 = performance.now();
   try {
-    if ($("chat").checked) await askChat(question);
-    else if ($("stream").checked) await askStream(question);
+    if ($("stream").checked) await askStream(question);
+    else if ($("chat").checked) await askChat(question);
     else await askOnce(question);
   } catch (e) {
-    $("answer").textContent = "出错了：" + e.message;
+    if (e.name === "AbortError") {
+      const mark = $("answer").textContent ? "\n\n[已停止]" : "[已停止]";
+      $("answer").textContent += mark;
+    } else {
+      $("answer").textContent = "出错了：" + e.message;
+    }
   } finally {
-    $("send").disabled = false;
+    controller = null;
+    $("send").textContent = "提问";
     $("q").disabled = false;
     const local = Math.round(performance.now() - t0) + " ms";
     $("meta").textContent = serverElapsed
@@ -324,10 +345,17 @@ async function send() {
 }
 
 // 两个入口，共用同一个 send：点按钮、按回车
-$("send").onclick = send;
+$("send").onclick = () => {
+  if(controller){
+    controller.abort();
+  }else{
+    send();
+  }
+}
 
 // 新会话：删后端历史 → 清本地 id → 清界面
 $("newchat").onclick = async () => {
+  if (controller) controller.abort();
   if (SID) {
     await fetch("/history/" + SID, { method: "DELETE" }).catch(() => {});
   }
