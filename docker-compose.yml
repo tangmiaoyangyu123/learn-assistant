@@ -11,5 +11,6 @@ services:
       - ./chroma_db:/app/chroma_db     # 向量库
       - ./uploads:/app/uploads         # 原始 PDF
       - ./chat.db:/app/chat.db         # 对话历史
+      - ./static:/app/static           #前端目录：改完刷新即可，不用 rebuild
     restart: unless-stopped
 

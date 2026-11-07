@@ -16,10 +16,35 @@
   }
   .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 0; }
+  .top {
+    display: flex; justify-content: space-between;
+    align-items: flex-start; gap: 16px;
+    margin-bottom: 24px;
+  }
+  .status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted); white-space: nowrap;
+    padding-top: 4px;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #9ca3af;              /* 默认灰：还没连上 */
+    display: inline-block;            /* span 是行内元素，不加这行宽高无效 */
+  }
+  .dot.online  { background: #22c55e; }
+  .dot.offline { background: #ef4444; }
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .card.hero {
+    border-left: 3px solid var(--accent);
+    padding: 18px 20px;
+  }
+  .card.muted {
+    background: #fafafa;
+    border-color: #f0f0f0;
   }
   textarea {
     width: 100%; min-height: 88px; resize: vertical; font: inherit;
@@ -34,7 +59,7 @@
   button:disabled { opacity: .5; cursor: not-allowed; }
   .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
   .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; letter-spacing: .04em; }
-  .answer { white-space: pre-wrap; }
+  .answer { white-space: pre-wrap; font-size: 16px; }
   .sources { display: flex; flex-direction: column; gap: 8px; }
   .src {
     font-size: 12px; background: #eef2ff; color: #3730a3;
@@ -47,12 +72,35 @@
          padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
   .doc .name { flex: 1; }
   .doc button { padding: 4px 10px; font-size: 12px; background: #ef4444; }
+
+  details.card > summary {
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 0;
+    list-style: none;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::before {
+    content: "▸";
+    color: var(--muted);
+    transition: transform .15s;
+  }
+  details.card[open] > summary::before { transform: rotate(90deg); }
+  details.card[open] > summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>learn-assistant</h1>
-  <div class="sub">基于本地知识库的问答服务</div>
+  <header class="top">
+    <div>
+      <h1>learn-assistant</h1>
+      <div class="sub">本地知识库问答 · RAG</div>
+    </div>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">连接中…</span>
+    </div>
+  </header>
 
   <div class="card">
     <textarea id="q" placeholder="问点什么，比如：这份文档讲了什么？"></textarea>
@@ -70,29 +118,36 @@
     </div>
   </div>
 
-  <div class="card" id="answerCard">
+  <div class="card hero" id="answerCard">
     <div class="label">回答</div>
     <div class="answer" id="answer"></div>
   </div>
 
-  <div class="card" id="sourcesCard">
+  <div class="card muted" id="sourcesCard">
     <div class="label">来源</div>
     <div class="sources" id="sources"></div>
   </div>
 
-  <div class="card" id="kbCard">
-    <div class="label">知识库</div>
+  <details class="card" id="kbCard">
+    <summary class="label">
+      知识库 <span id="kbSummary">· 读取中…</span>
+    </summary>
     <div class="row">
       <input type="file" id="file" accept=".pdf">
       <button id="upload">上传</button>
       <span class="meta" id="kbMeta"></span>
     </div>
     <div id="docs" class="docs"></div>
-  </div>
+  </details>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
+
+function setStatus(ok, text) {
+  $("dot").className = "dot " + (ok ? "online" : "offline");
+  $("statusText").textContent = text;
+}
 
 let serverElapsed = null;
 
@@ -237,6 +292,8 @@ async function loadDocs() {
   if (!data.documents.length) {
     box.innerHTML = '<span style="color:#6b7280;font-size:13px">知识库是空的，先传一个 PDF</span>';
     $("kbMeta").textContent = "";
+    $("kbSummary").textContent = "· 空的";
+    setStatus(true, "在线 · 知识库为空");
     return;
   }
 
@@ -263,6 +320,8 @@ async function loadDocs() {
   }
 
   $("kbMeta").textContent = `共 ${data.documents.length} 个文件 · ${data.total_chunks} 块`;
+  $("kbSummary").textContent = `· ${data.documents.length} 个文件 / ${data.total_chunks} 块`;
+  setStatus(true, `在线 · ${data.total_chunks} 块`);
 }
 
 async function uploadFile() {
@@ -374,6 +433,7 @@ if (SID) $("sid").textContent = "会话 " + SID.slice(0, 8);
 $("upload").onclick = uploadFile;
 loadDocs().catch((e) => {
   $("kbMeta").textContent = "读取知识库失败：" + e.message;
+  setStatus(false, "后端未连接");
 });
 
 $("q").onkeydown = (e) => {
