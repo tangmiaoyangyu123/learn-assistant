@@ -7,3 +7,6 @@ onnxruntime
 tokenizers
 numpy
 gradio>=5.0
+fastapi
+uvicorn
+python-multipart

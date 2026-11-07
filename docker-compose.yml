@@ -1,12 +1,15 @@
 services:
-  pdf-qa:
-    image: pdf-qa:v1
-    container_name: pdf-qa
+  rag-app:
+    build: .
+    image: rag-app:v1
+    container_name: rag-app
     ports:
-      - "7860:7860"
+      - "8000:8000"
     env_file:
       - .env
     volumes:
-      - D:\PythonProject\chroma_db:/app/chroma_db
+      - ./chroma_db:/app/chroma_db     # 向量库
+      - ./uploads:/app/uploads         # 原始 PDF
+      - ./chat.db:/app/chat.db         # 对话历史
     restart: unless-stopped
 

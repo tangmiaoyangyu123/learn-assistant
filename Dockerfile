@@ -19,14 +19,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # ⑤ 复制应用代码（.dockerignore 里排除的不会进来，models/ 会进来）
 COPY . .
 
-# ⑥ ★ 让 Gradio 监听 0.0.0.0 —— 否则宿主机访问不到
-#    实测：gradio 6.29.1 的 launch() 会读这两个环境变量
-ENV GRADIO_SERVER_NAME="0.0.0.0"
-ENV GRADIO_SERVER_PORT="7860"
-
-# ⑦ 声明端口（只是给人和工具看的说明，真正的映射靠 docker run -p）
+# ⑥ 让 Python 的输出不缓冲，日志能实时打出来
 ENV PYTHONUNBUFFERED=1
-EXPOSE 7860
 
-# ⑧ 启动命令
-CMD ["python", "pdf_qa_app.py"]
+# ⑦ 声明端口（给人看，真正映射靠 compose 的 ports）
+EXPOSE 8000
+
+# ⑧ 启动命令：uvicorn 跑 api_rag 里的 app
+CMD ["python", "-m", "uvicorn", "api_rag:app", "--host", "0.0.0.0", "--port", "8000"]
