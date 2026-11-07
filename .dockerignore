@@ -16,6 +16,7 @@ chat_history.json
 # 不需要打包的资料
 test.pdf
 test_doc.txt
+labs/
 
 uploads/
 *.db

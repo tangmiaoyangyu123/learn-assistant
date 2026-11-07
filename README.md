@@ -87,7 +87,12 @@ models/bge-small-zh-onnx/
 
 **② 配置 API Key**
 
-项目根目录新建 `.env`（已在 `.gitignore` 里，不会上传）：
+```bash
+copy .env.example .env      # Windows
+# cp .env.example .env      # macOS / Linux
+```
+
+然后填入自己的 key。`.env` 已在 `.gitignore` 里，不会被提交：
 
 ```
 DEEPSEEK_API_KEY=sk-你的key
@@ -165,7 +170,9 @@ Docker 方式的数据持久化靠三个 bind mount，删容器不丢数据：
 | `docs_helper.py` | 接口文档挂载 |
 | `static/index.html` | 前端（原生 HTML/CSS/JS，单文件） |
 | `Dockerfile` / `docker-compose.yml` | 容器化与编排 |
+| `.env.example` | 环境变量模板，复制成 `.env` 后填 key |
 | `TESTING.md` | 边界测试记录 |
+| `labs/` | 第 1-7 周各天练习脚本，非项目本体（见 [labs/README.md](labs/README.md)） |
 
 ---
 
@@ -177,10 +184,12 @@ Docker 方式的数据持久化靠三个 bind mount，删容器不丢数据：
 上传 PDF → 切分入库 → 提问 → 只依据文档作答并标注引用来源。
 
 ```bash
-python pdf_qa_app.py
+python -m labs.pdf_qa_app
 ```
 
 浏览器打开 `http://127.0.0.1:7860` → 上传 PDF → 点「加入知识库」→ 在「② 提问」标签页提问。
+
+> 各周练习脚本都在 [`labs/`](labs/README.md)，用 `python -m labs.xxx` 运行。
 
 架构与项目 4 的建库 / 问答两段相同，区别在于它用 Gradio 组件搭界面、没有独立的服务层和前端。
 
@@ -207,7 +216,7 @@ python search_docs.py "综合测评怎么加分"   # 检索
 - 角色模板化：公共约束一处管理（`prompts.py`）
 
 ```bash
-python assistant_v3.py
+python -m labs.assistant_v3
 ```
 
 | 输入 | 作用 |
@@ -215,6 +224,8 @@ python assistant_v3.py
 | python / english / career / debug | 切换角色（开启新对话） |
 | new | 当前角色重新开始 |
 | quit | 退出 |
+
+> 源码在 [`labs/assistant_v3.py`](labs/assistant_v3.py)，角色模板在同目录 `prompts.py`。
 
 ---
 
