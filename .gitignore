@@ -9,6 +9,13 @@ models/
 .gradio/
 *.db
 
+# 媒体文件：演示视频几百 MB，进 git 会让每次 clone 都变慢，而且一旦提交
+# 就永久留在历史里，删不掉（即使后来 git rm，旧提交里仍有）
+*.mp4
+*.mov
+*.avi
+*.mkv
+
 #.gitifnore 作为git的禁止相传名单，列在里面的文件，git一律无视，永远不会传到GitHub
 #为什么今天必须要有：你马上要把整个项目传上 GitHub——如果
 #.env（里面有你的 API Key）跟着传上去，全世界都能看到你
