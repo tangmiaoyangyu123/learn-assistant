@@ -65,6 +65,12 @@ python -m labs.chroma_demo
 | `stream_lab.py` | SSE 流式实验台，验证分块与 `[DONE]` |
 | `upload_lab.py` | 文件上传实验台，`UploadFile` 与 `FormData` |
 
+## 第 8 周 · Agent 与 Function Calling
+
+| 文件 | 说明 |
+|---|---|
+| `fc_observe.py` | 观察 Function Calling：`tool_calls` 结构、`arguments` 是字符串、一次工具调用等于两轮请求 |
+
 ---
 
 ## 为什么 `chunk_lab.py` 和 `doc_loader.py` 不在这个目录
