@@ -69,7 +69,8 @@ def execute(name, args_json):
         return json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False)
 
 
-def run_agent(question, tools, max_turns=5):
+def run_agent(question, tools, max_turns=5, executor=None):
+    executor = executor or execute
     messages = [{"role": "user", "content": question}]
     requests_made = 0
 
@@ -104,7 +105,7 @@ def run_agent(question, tools, max_turns=5):
         # 逐个执行，结果按 id 回填
         for tc in m.tool_calls:
             print(f"  [调用] {tc.function.name}({tc.function.arguments})")
-            result = execute(tc.function.name, tc.function.arguments)
+            result = executor(tc.function.name, tc.function.arguments)
             print(f"  [结果] {result}")
             messages.append({
                 "role": "tool",
@@ -114,13 +115,13 @@ def run_agent(question, tools, max_turns=5):
 
     return f"超过最大轮数 {max_turns}，已中止"
 
-
-print("=" * 60)
-print(run_agent("今天几号？", TOOLS))
-print("=" * 60)
-print(run_agent("123*456 等于多少？", TOOLS))
-print("=" * 60)
-print(run_agent("你好，你是谁？", TOOLS))
-print("=" * 60)
-print(run_agent("先调random number取一个数，再把这个数乘以37，告诉我结果。", TOOLS))
-print("=" * 60)
+if __name__ == "__main__":
+    print("=" * 60)
+    print(run_agent("今天几号？", TOOLS))
+    print("=" * 60)
+    print(run_agent("123*456 等于多少？", TOOLS))
+    print("=" * 60)
+    print(run_agent("你好，你是谁？", TOOLS))
+    print("=" * 60)
+    print(run_agent("先调random number取一个数，再把这个数乘以37，告诉我结果。", TOOLS))
+    print("=" * 60)
