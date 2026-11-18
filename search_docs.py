@@ -8,12 +8,15 @@
 前置：先跑过 build_knowledge_base.py 把知识库建好
 """
 import sys
+from pathlib import Path
 
 import chromadb
 
 from chinese_embedding import MODEL_DIR, ChineseEmbedding
 
-DB_PATH = "chroma_db"
+# 绝对路径：__file__ 永远指向本文件，与"从哪个目录启动"无关。
+# 写成相对路径 "chroma_db" 时，从 labs/ 目录启动会连上一个自动新建的空库，且不报错。
+DB_PATH = str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION = "kb_zh"
 #返回最相似的3段。
 N_RESULTS = 3

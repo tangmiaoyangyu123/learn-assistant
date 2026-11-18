@@ -18,7 +18,7 @@ import chromadb
 from build_knowledge_base import MIN_CHARS_PER_PAGE, chunks_from_pdf
 from chinese_embedding import MODEL_DIR, ChineseEmbedding
 
-DB_PATH = "chroma_db"
+DB_PATH = str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION = "upload_kb"
 
 #惰性单列模式
