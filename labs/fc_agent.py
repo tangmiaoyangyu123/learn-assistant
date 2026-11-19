@@ -69,9 +69,14 @@ def execute(name, args_json):
         return json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False)
 
 
-def run_agent(question, tools, max_turns=5, executor=None):
+def run_agent(question, tools, max_turns=5, executor=None, system=None, context=None):
     executor = executor or execute
-    messages = [{"role": "user", "content": question}]
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    if context:
+        question = f"{context}\n\n用户问题：{question}"
+    messages.append({"role": "user", "content": question})
     requests_made = 0
 
     for turn in range(1, max_turns + 1):

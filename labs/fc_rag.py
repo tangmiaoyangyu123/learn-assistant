@@ -71,3 +71,42 @@ if __name__ == "__main__":
     print(run_agent("综合测评成绩由哪几个模块组成，各占多少比例？", TOOLS, executor=execute))
     print(run_agent("学校食堂几点关门？", TOOLS, executor=execute))
     print(run_agent("你好，你是谁？", TOOLS, executor=execute))
+
+POLICY_WORDS = [
+    "综合测评", "综测", "德育", "智育", "身心", "能力素质",
+    "加分", "扣分", "评奖", "评优", "奖学金", "素质测评",
+]
+
+
+def is_policy_question(question):
+    """粗筛：命中任一词就当作政策问题"""
+    return any(w in question for w in POLICY_WORDS)
+
+
+def ask_forced(question, tools, executor):
+    """政策类问题先无条件检索，把结果塞进上下文；其余交给模型自己决定。"""
+    if not is_policy_question(question):
+        print("  [路径] 普通问题 → 模型自己决定")
+        return run_agent(question, tools, executor=executor)
+
+    print("  [路径] 政策问题 → 强制先检索")
+    raw = executor("search_knowledge", json.dumps({"query": question}, ensure_ascii=False))
+    data = json.loads(raw)
+    print(f"  [检索] found={data.get('found')}")
+
+    if not data.get("found"):
+        return "知识库里没有找到相关内容，建议查阅学院发布的最新版实施细则原文。"
+
+    context = (
+        "以下是知识库检索到的资料，请只根据这些资料回答；"
+        "资料里没有的内容直接说没有，不要补充你自己的知识。\n\n" 
+        f"{raw}"
+    )
+    return run_agent(question, tools, executor=executor, context=context)
+
+if __name__ == "__main__":
+    print(ask_forced("综合测评德育素质怎么评？", TOOLS, execute))
+    print("=" * 60)
+    print(ask_forced("你好，你是谁？", TOOLS, execute))
+    print("=" * 60)
+    print(ask_forced("知识库里有哪些文件？", TOOLS, execute))
