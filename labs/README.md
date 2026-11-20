@@ -70,6 +70,9 @@ python -m labs.chroma_demo
 | 文件 | 说明 |
 |---|---|
 | `fc_observe.py` | 观察 Function Calling：`tool_calls` 结构、`arguments` 是字符串、一次工具调用等于两轮请求 |
+| `fc_agent.py` | `run_agent`：多轮工具循环、串行调用、异常兜底、`executor` 注入 |
+| `fc_rag.py` | 把本地检索包成工具（`search_knowledge`）+ `ask_forced` 强制检索 |
+| `fc_select.py` | 5 工具选择实验：description / 前缀命名 / 工具集裁剪的对比 |
 
 ---
 
