@@ -6,6 +6,7 @@ from typing import TypedDict, Annotated, Literal
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -102,7 +103,7 @@ def router(state: AgentState):
     question = state["messages"][-1].content
     hit = any(w in question for w in POLICY_WORDS)
     print(f"  [router] {question[:16]}... → {'kb' if hit else 'chat'}")
-    return {"route": "kb" if hit else "chat"}
+    return {"route": "kb" if hit else "chat", "turns": 0, "context": "", "sources": []}
 
 
 def pick(state: AgentState) -> Literal["kb", "chat"]:
@@ -131,9 +132,9 @@ def llm_node(state: AgentState):
         sys += "\n\n以下是知识库资料，只根据它回答：\n" + state["context"]
 
     msgs = [SystemMessage(sys)] + list(state["messages"])
-    print(f"  [llm] 第 {state['turns'] + 1} 次，system {len(sys)} 字，messages {len(msgs)} 条")
+    print(f"  [llm] 第 {state.get('turns', 0) + 1} 次，system {len(sys)} 字，messages {len(msgs)} 条")
     r = llm_with_tools.invoke(msgs)
-    return {"messages": [r], "turns": state["turns"] + 1}
+    return {"messages": [r], "turns": state.get("turns", 0) + 1}
 
 
 def tools_node(state: AgentState):
@@ -169,12 +170,12 @@ graph.add_edge("kb", "llm")
 graph.add_conditional_edges("llm", should_continue, {"tools": "tools", "end": END})
 graph.add_edge("tools", "llm")
 
-app = graph.compile()
+app = graph.compile(checkpointer=MemorySaver())
 
 
-def ask(question):
-    out = app.invoke({"messages": [HumanMessage(question)],
-                      "turns": 0, "route": "", "context": "", "sources": []})
+def ask(question, thread_id="u-1"):
+    cfg = {"configurable": {"thread_id": thread_id}}
+    out = app.invoke({"messages": [HumanMessage(question)],}, cfg)
     return out["messages"][-1].content, out["sources"]
 
 if __name__ == "__main__":
